@@ -15,11 +15,12 @@ on:
       - frontend/**
       - .github/workflows/build-portable-windows.yml
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-portable:
     runs-on: windows-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -37,9 +38,21 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Show toolchain versions
+        shell: pwsh
+        run: |
+          Write-Host "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=$env:FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"
+          python --version
+          node --version
+          npm --version
+
       - name: Build portable distribution
-        shell: cmd
-        run: build_portable.bat
+        shell: pwsh
+        run: |
+          cmd /c build_portable.bat 2>&1 | Tee-Object -FilePath build-portable.log
+          if ($LASTEXITCODE -ne 0) {
+            throw "build_portable.bat failed with exit code $LASTEXITCODE"
+          }
 
       - name: Archive portable folder
         shell: pwsh
@@ -56,3 +69,12 @@ jobs:
           path: dist/pdf_matcher.zip
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-portable-log
+          path: build-portable.log
+          if-no-files-found: ignore
+          retention-days: 7
