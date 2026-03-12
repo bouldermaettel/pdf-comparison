@@ -1,0 +1,127 @@
+name: Deploy Azure Container Apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      subscriptionId:
+        description: Azure subscription ID
+        required: true
+        default: 7bd7ccec-546d-4bd0-a893-0e36681579d3
+      resourceGroup:
+        description: Resource group name
+        required: true
+        default: rg-pdf-comparison
+      location:
+        description: Azure location for resource group
+        required: true
+        default: switzerlandnorth
+      appName:
+        description: Container App name
+        required: true
+        default: pdf-comparison
+      acrName:
+        description: Azure Container Registry name
+        required: true
+        default: pdfcomp48904
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Ensure target resource group
+        shell: bash
+        run: |
+          set -e
+          az account set --subscription "${{ github.event.inputs.subscriptionId }}"
+          az group create \
+            --name "${{ github.event.inputs.resourceGroup }}" \
+            --location "${{ github.event.inputs.location }}" \
+            --output none
+
+      - name: Ensure ACR exists and build image
+        id: build
+        shell: bash
+        run: |
+          set -e
+          SUB_ID="${{ github.event.inputs.subscriptionId }}"
+          RG_NAME="${{ github.event.inputs.resourceGroup }}"
+          ACR_NAME="${{ github.event.inputs.acrName }}"
+          APP_NAME="${{ github.event.inputs.appName }}"
+
+          if ! az acr show --subscription "$SUB_ID" --name "$ACR_NAME" >/dev/null 2>&1; then
+            az acr create \
+              --subscription "$SUB_ID" \
+              --resource-group "$RG_NAME" \
+              --name "$ACR_NAME" \
+              --sku Basic \
+              --admin-enabled true \
+              --public-network-enabled true \
+              --output none
+          fi
+
+          LOGIN_SERVER=$(az acr show --subscription "$SUB_ID" --name "$ACR_NAME" --query loginServer -o tsv)
+          IMAGE_TAG="$LOGIN_SERVER/$APP_NAME:${GITHUB_SHA}"
+
+          az acr build \
+            --subscription "$SUB_ID" \
+            --registry "$ACR_NAME" \
+            --image "$APP_NAME:${GITHUB_SHA}" \
+            --image "$APP_NAME:latest" \
+            --file Dockerfile.backend \
+            . \
+            --output none
+
+          REG_USER=$(az acr credential show --subscription "$SUB_ID" --name "$ACR_NAME" --query username -o tsv)
+          REG_PASS=$(az acr credential show --subscription "$SUB_ID" --name "$ACR_NAME" --query "passwords[0].value" -o tsv)
+
+          echo "loginServer=$LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+          echo "imageTag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "registryUsername=$REG_USER" >> "$GITHUB_OUTPUT"
+          echo "registryPassword=$REG_PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Bicep to Container Apps
+        id: deploy
+        shell: bash
+        run: |
+          set -e
+          DEPLOY_JSON=$(az deployment group create \
+            --subscription "${{ github.event.inputs.subscriptionId }}" \
+            --resource-group "${{ github.event.inputs.resourceGroup }}" \
+            --template-file infra/main.bicep \
+            --parameters \
+              appName="${{ github.event.inputs.appName }}" \
+              containerImage="${{ steps.build.outputs.imageTag }}" \
+              registryServer="${{ steps.build.outputs.loginServer }}" \
+              registryUsername="${{ steps.build.outputs.registryUsername }}" \
+              registryPassword="${{ steps.build.outputs.registryPassword }}" \
+            --query "{state:properties.provisioningState,appUrl:properties.outputs.appUrl.value,environmentName:properties.outputs.environmentName.value}" \
+            -o json)
+
+          echo "$DEPLOY_JSON"
+          APP_URL=$(echo "$DEPLOY_JSON" | jq -r '.appUrl')
+          echo "appUrl=$APP_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          echo "## Azure Container Apps deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Subscription: ${{ github.event.inputs.subscriptionId }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Resource group: ${{ github.event.inputs.resourceGroup }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ACR: ${{ github.event.inputs.acrName }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: ${{ steps.build.outputs.imageTag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- App URL: ${{ steps.deploy.outputs.appUrl }}" >> "$GITHUB_STEP_SUMMARY"

@@ -141,6 +141,35 @@ If your local Windows machine cannot build directly, you can use GitHub Actions 
 5. Extract the zip and copy the `pdf_matcher` folder to your USB stick.
 6. Run `run.bat` inside that folder on the target Windows machine.
 
+## GitHub Actions deploy to Azure Container Apps
+
+This repository includes a workflow that builds the backend image in Azure Container Registry and deploys `infra/main.bicep` to Azure Container Apps.
+
+Workflow file:
+
+- `.github/workflows/deploy-azure-container-apps.yml`
+
+One-time GitHub secret setup:
+
+1. Create a service principal with access to your subscription/resource group.
+2. Add repository secret `AZURE_CREDENTIALS` in GitHub with this JSON shape:
+
+```json
+{
+  "clientId": "<app-id>",
+  "clientSecret": "<password>",
+  "subscriptionId": "<subscription-id>",
+  "tenantId": "<tenant-id>"
+}
+```
+
+Run deployment:
+
+1. Open GitHub `Actions`.
+2. Run `Deploy Azure Container Apps`.
+3. Keep defaults or override `subscriptionId`, `resourceGroup`, `appName`, and `acrName`.
+4. Read the deployed app URL from the workflow summary.
+
 ## Notes
 
 - The extractor is designed to be generic, but it works best when the source PDF contains an actual table with a recognizable header row.
