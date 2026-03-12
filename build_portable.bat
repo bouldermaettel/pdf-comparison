@@ -29,9 +29,22 @@ if errorlevel 1 (
 )
 
 echo Building frontend...
-call npm --prefix frontend install
-if errorlevel 1 exit /b 1
-call npm --prefix frontend run build
+pushd frontend
+if exist package-lock.json (
+  call npm ci
+) else (
+  call npm install
+)
+if errorlevel 1 (
+  popd
+  exit /b 1
+)
+call npm run build
+if errorlevel 1 (
+  popd
+  exit /b 1
+)
+popd
 if errorlevel 1 exit /b 1
 
 echo Installing packaging dependency...
