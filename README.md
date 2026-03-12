@@ -74,6 +74,25 @@ Notes:
 - Frontend container uses Nginx and proxies `/api/*` to backend service `backend:8000`.
 - Backend container runs `uvicorn app:app` on port 8000 (inside Docker network).
 
+## Azure infra (Container Apps)
+
+The `infra/` folder contains a Bicep template for deploying this app to Azure Container Apps.
+
+Deploy command:
+
+```bash
+az deployment group create \
+  --resource-group <rg-name> \
+  --template-file infra/main.bicep \
+  --parameters infra/parameters.json
+```
+
+Before deploying:
+
+- Set `containerImage` in `infra/parameters.json` to your pushed image.
+- If using a private registry, fill `registryServer`, `registryUsername`, and `registryPassword`.
+- Keep secrets out of source control; use secure parameter handling in CI/CD for production.
+
 ## Windows portable build (USB-friendly, no installer)
 
 This project can be shipped as a portable folder that runs on Windows without installing Python on the target machine.

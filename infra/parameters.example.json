@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "value": "pdf-comparison"
+    },
+    "containerImage": {
+      "value": "<your-acr>.azurecr.io/pdf-comparison:latest"
+    },
+    "registryServer": {
+      "value": "<your-acr>.azurecr.io"
+    },
+    "registryUsername": {
+      "value": "<your-acr-username>"
+    },
+    "registryPassword": {
+      "value": "<your-acr-password>"
+    },
+    "cpuCores": {
+      "value": "1.0"
+    },
+    "memorySize": {
+      "value": "2Gi"
+    },
+    "minReplicas": {
+      "value": 1
+    },
+    "maxReplicas": {
+      "value": 2
+    }
+  }
+}
