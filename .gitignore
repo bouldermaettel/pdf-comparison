@@ -8,3 +8,5 @@ frontend/tsconfig.tsbuildinfo
 *.pyc
 *.pyo
 *.pyd
+build/
+dist/
